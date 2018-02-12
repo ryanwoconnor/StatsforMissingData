@@ -1,0 +1,8 @@
+<nav search_view="search" color="#A9513E">
+  <view name="stats_broken_hosts" default="true" />
+  <collection label="Tuning Dashboards">
+    <view name="tune_hosts" />
+    <view name="tune_sourcetypes" />
+    <view name="tune_indexes" />
+  </collection>
+</nav>
