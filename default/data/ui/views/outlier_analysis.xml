@@ -1,0 +1,198 @@
+<form>
+  <label>Outlier Analysis</label>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="host" searchWhenChanged="true">
+      <label>Host</label>
+      <fieldForLabel>host</fieldForLabel>
+      <fieldForValue>host</fieldForValue>
+      <search>
+        <query>|metadata type=hosts index=* | table host</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="sourcetype" searchWhenChanged="true">
+      <label>Sourcetype</label>
+      <fieldForLabel>sourcetype</fieldForLabel>
+      <fieldForValue>sourcetype</fieldForValue>
+      <search>
+        <query>|metadata type=sourcetypes index=* | table sourcetype</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="index" searchWhenChanged="true">
+      <label>Index</label>
+      <fieldForLabel>index</fieldForLabel>
+      <fieldForValue>index</fieldForValue>
+      <search>
+        <query>|eventcount summarize=false index=* -count | table index | dedup index</query>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <html>
+This Dashboard displays specific information about outliers for your specific combination of data (Host/Sourcetype/Index). This was built around the same framework that can be found in this <a href="https://www.splunk.com/blog/2018/01/19/cyclical-statistical-forecasts-and-anomalies-part-1.html">blog series</a> by the Splunk Machine Learning Toolkit team. It can be utlized to interpret when outliers were detected in your data, so you can investigate even further as to what may be going on.  
+<br/>
+</html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+<h1>Panel Descriptions</h1>
+<h2>Frequency of Sending</h2>
+Cumulative Frequency Analysis of the selected Host/Index/Sourcetype for the selected timeframe. 
+<h2>Minimum # of Data Points for a Time Period</h2>
+This panel will give you information about the minimum number of data points for a selected timeframe. If you're Looking at 60 days worth of data, you should have at least 8 or 9 data points. If you have anything less, this means you were missing data and your outlier detections are going to be less accurate. 
+<h2>Number of Low Outliers</h2>
+Because most people care about "Low Outliers" (Too Little Data) vs. "High Outliers" (Too Much Data), this metric will show you how many low outliers exist in your data. 
+<h2>Outliers Timeline</h2>
+This timeline will show you a timechart of when your outliers were found. You can click through on this panel to see an advanced analysis of the selected combination of data.  
+<br/>
+</html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Frequency of Sending</title>
+      <single>
+        <search>
+          <query>| tstats count WHERE index=$index$ AND sourcetype=$sourcetype$ AND host=$host$ by _time host sourcetype index span=15m 
+| sort 0 - host sourcetype index _time 
+| streamstats window=2 range(_time) as range by host sourcetype index 
+| eval combo=host."&amp;&amp;&amp;&amp;".sourcetype."&amp;&amp;&amp;&amp;".index 
+| stats avg(range) as avg max(range) as max count(combo) as M by sourcetype host index 
+| eval max=round(max,0) 
+| eval avg=round(avg,0) 
+| addinfo 
+| eval N=ceiling((info_max_time-info_min_time)/15/60) 
+| eval frequency=M/N 
+| fields frequency 
+| eval frequency=round(frequency*100,0)</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xd93f3c","0xf7bc38","0x65a637"]</option>
+        <option name="rangeValues">[30,80]</option>
+        <option name="unit">%</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Minimum # of Data Points for a Time Period</title>
+      <single>
+        <search>
+          <query>|makeresults | eval combo="$host$"."&amp;&amp;&amp;&amp;"."$sourcetype$"."&amp;&amp;&amp;&amp;"."$index$" | lookup number_datapoints_lookup combo | mvexpand sum  | stats min(sum) as min</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xd93f3c","0xf58f39","0xf7bc38","0x65a637"]</option>
+        <option name="rangeValues">[3,5,7]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Number of Low Outliers</title>
+      <single>
+        <search>
+          <query>| tstats count WHERE sourcetype=$sourcetype$ AND host=$host$ AND index=$index$ by _time host sourcetype index span=30m 
+| makecontinuous _time span=30m 
+| eval combo=host."&amp;&amp;&amp;&amp;".sourcetype."&amp;&amp;&amp;&amp;".index 
+| xyseries _time combo count 
+| makecontinuous _time span=30m 
+| fillnull value=0 
+| untable _time combo count 
+| eval HourOfDay=strftime(_time, "%H") 
+| eval BucketMinuteOfHour=strftime(_time, "%M") 
+| eval DayOfWeek=strftime(_time, "%A") 
+| stats avg(count) as actual by HourOfDay,BucketMinuteOfHour,DayOfWeek,combo,_time 
+| lookup state_lookup HourOfDay as HourOfDay BucketMinuteOfHour as BucketMinuteOfHour DayOfWeek as DayOfWeek combo as combo OUTPUT upperBound lowerBound 
+| fields - BucketMinuteOfHour DayOfWeek series 
+| eval isOutlierLow=if(actual &lt; lowerBound ,
+    abs(actual-lowerBound)/lowerBound, 0) 
+| eval isOutlierHigh=if(actual &gt; upperBound,
+    abs(actual-upperBound)/upperBound, 0) 
+| eval isOutlier=if(actual &lt; lowerBound OR actual &gt; upperBound,
+    abs(actual-upperBound)/abs(upperBound-lowerBound), 0) 
+| fields - HourOfDay 
+| fields _time actual combo lowerBound upperBound isOutlier 
+| eval isOutlierBinary=case(isOutlier!=0, "1", isOutlier=0, "0") 
+| search isOutlierBinary=1 
+| stats count by combo 
+| sort 0 - isOutlierBinary count 
+| fields count</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Outliers Timeline</title>
+      <chart>
+        <search>
+          <query>| tstats count WHERE  sourcetype=$sourcetype$ AND host=$host$ AND index=$index$  by _time host sourcetype index span=30m 
+| makecontinuous _time span=30m 
+| eval combo=host."&amp;&amp;&amp;&amp;".sourcetype."&amp;&amp;&amp;&amp;".index 
+| xyseries _time combo count 
+| makecontinuous _time span=30m 
+| fillnull value=0 
+| untable _time combo count 
+| eval HourOfDay=strftime(_time, "%H") 
+| eval BucketMinuteOfHour=strftime(_time, "%M") 
+| eval DayOfWeek=strftime(_time, "%A") 
+| stats avg(count) as actual by HourOfDay,BucketMinuteOfHour,DayOfWeek,combo,_time 
+| lookup state_lookup HourOfDay as HourOfDay BucketMinuteOfHour as BucketMinuteOfHour DayOfWeek as DayOfWeek combo as combo OUTPUT upperBound lowerBound 
+| fields - BucketMinuteOfHour DayOfWeek series 
+| eval isOutlierLow=if(actual &lt; lowerBound ,
+    abs(actual-lowerBound)/lowerBound, 0) 
+| eval isOutlierHigh=if(actual &gt; upperBound,
+    abs(actual-upperBound)/upperBound, 0) 
+| eval isOutlier=if(actual &lt; lowerBound OR actual &gt; upperBound,
+    abs(actual-upperBound)/abs(upperBound-lowerBound), 0) 
+| fields - HourOfDay 
+| fields _time actual lowerBound upperBound isOutlier | sort 0 + _time</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.overlayFields">isOutlier</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">548</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">0</option>
+        <option name="trellis.size">medium</option>
+        <drilldown>
+          <link target="_blank">/app/StatsforMissingData/analyze_combination?form.host=$host$&amp;form.index=$index$&amp;form.sourcetype=$sourcetype$</link>
+        </drilldown>
+      </chart>
+    </panel>
+  </row>
+</form>

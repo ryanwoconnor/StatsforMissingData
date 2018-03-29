@@ -1,18 +1,18 @@
-<form>
-  <label>Stats Broken Hosts</label>
+<dashboard>
+  <label>Frequency Analysis</label>
   <search id="indexBaseSearch">
     <query>
-      |loadjob savedsearch="nobody:StatsforBrokenHosts:Index Frequency" | fields index frequency Percentile
+      |loadjob savedsearch="nobody:StatsforMissingData:Index Frequency" | fields index frequency Percentile
     </query>
   </search>
   <search id="sourcetypeBaseSearch">
     <query>
-      |loadjob savedsearch="nobody:StatsforBrokenHosts:Sourcetype Frequency" | fields sourcetype frequency Percentile
+      |loadjob savedsearch="nobody:StatsforMissingData:Sourcetype Frequency" | fields sourcetype frequency Percentile
     </query>
   </search>
   <search id="hostBaseSearch">
     <query>
-      |loadjob savedsearch="nobody:StatsforBrokenHosts:Host Frequency" | fields host frequency Percentile
+      |loadjob savedsearch="nobody:StatsforMissingData:Host Frequency" | fields host frequency Percentile
     </query>
   </search>
   <search id="sourcetypeSearchStats">
@@ -32,49 +32,31 @@
     <earliest>$field1.earliest$</earliest>
     <latest>$field1.latest$</latest>
   </search>
-  <fieldset submitButton="false">
-    <input type="time" token="field1">
-      <label>Select Time</label>
-      <default>
-        <earliest>-24h@h</earliest>
-        <latest>now</latest>
-      </default>
-    </input>
-    <input type="dropdown" token="sourcetype">
-      <label>Sourcetype Select</label>
-      <fieldForLabel>sourcetype</fieldForLabel>
-      <fieldForValue>sourcetype</fieldForValue>
-      <search>
-        <query>|metadata type=sourcetypes index=* | table sourcetype</query>
-        <earliest>-24h@h</earliest>
-        <latest>now</latest>
-      </search>
-    </input>
-  </fieldset>
   <row>
     <panel>
-      <title>Frequency of Selected Sourcetype (last 60 Days)</title>
-      <single>
-        <search base="sourcetypeBaseSearch">
-          <query> search sourcetype="$sourcetype$" | fields frequency</query>
-        </search>
-        <option name="drilldown">none</option>
-        <option name="unit">%</option>
-      </single>
-    </panel>
-    <panel>
-      <title>Selected Sourcetype Timechart of Events</title>
-      <chart>
-        <search>
-          <query>| tstats count WHERE sourcetype=$sourcetype$ by _time host sourcetype index span=15m | makecontinuous span=15m _time | eval combo=host."-".sourcetype."-".index |  xyseries _time combo count | fillnull value=0</query>
-          <earliest>$field1.earliest$</earliest>
-          <latest>$field1.latest$</latest>
-        </search>
-        <option name="charting.chart">line</option>
-        <option name="charting.chart.nullValueMode">zero</option>
-        <option name="charting.drilldown">none</option>
-        <option name="refresh.display">progressbar</option>
-      </chart>
+      <html>
+This Dashboard displays a <a href="https://en.wikipedia.org/wiki/Cumulative_frequency_analysis">cumulative frequency analysis</a> of your data - broken down by index, sourcetype, and host. This dashboard is intended to help you figure out which data you can keep a <b>very close</b> eye on 👀
+<br></br>
+<br></br><i><b>Note: </b>This does not mean that data which doesn't send frequently is <b>not</b> important. It means that if you want to take a "broad stroke" at alerting on missing data, then the data which sends very frequently, is the data you could safely alert on frequently. Conversely, the data which doesn't send very frequently, is not safe to alert on frequently. </i>
+</html>
+</panel>
+</row>
+<row>
+
+<panel>
+  <html>
+<h1>Description of panels</h1>
+<br></br>
+<h2>(Index, Sourcetype, Host) Frequency:</h2> 
+In this panel you'll see a visualization of the "shape" of your data. i.e. How frequent is each (Index, Sourcetype, Host) sending data, and then a percentile line to show where that falls in comparison to the rest of your (Index, Sourcetype, Hosts). 
+<br>
+</br>
+<h2>(Index, Sourcetype, Host) Frequency Table:</h2>
+In this panel you'll see a table of the "shape" of your data. This is similar information to the previous panel, but it is clickable. So if you want to further investigate that (Index, Sourcetype, Host) to see how often that specific (Index, Sourcetype, Host) is sending data, you can click on it and see that informatio<br></br>
+<br></br>
+<h2>(Index, Sourcetype, Host) Frequency Percentile Breakdown:</h2>
+In this panel you'll see a breakdown of where your (Index, Sourcetype, Hosts) frequencies fall in comparison to one another. How many (Index, Sourcetype, Hosts) fall in which percentile group?
+      </html>
     </panel>
   </row>
   <row>
@@ -99,7 +81,7 @@
           <condition field="frequency"></condition>
           <condition field="Percentile"></condition>
           <condition field="index">
-            <link target="_blank">/app/StatsforBrokenHosts/tune_indexes?form.index=$click.value2$</link>
+            <link target="_blank">/app/StatsforMissingData/analyze_indexes?form.index=$click.value2$</link>
           </condition>
         </drilldown>
       </table>
@@ -141,7 +123,7 @@
           <condition field="frequency"></condition>
           <condition field="Percentile"></condition>
           <condition field="sourcetype">
-            <link target="_blank">/app/StatsforBrokenHosts/tune_sourcetypes?form.sourcetype=$click.value2$</link>
+            <link target="_blank">/app/StatsforMissingData/analyze_sourcetypes?form.sourcetype=$click.value2$</link>
           </condition>
         </drilldown>
       </table>
@@ -180,7 +162,7 @@ eventstats p95(frequency) as p95 p75(frequency) as p75 p50(frequency) as p50 p25
           <condition field="frequency"></condition>
           <condition field="Percentile"></condition>
           <condition field="host">
-            <link target="_blank">/app/StatsforBrokenHosts/tune_hosts?form.host=$click.value2$</link>
+            <link target="_blank">/app/StatsforMissingData/analyze_hosts?form.host=$click.value2$</link>
           </condition>
         </drilldown>
       </table>
@@ -195,4 +177,4 @@ eventstats p95(frequency) as p95 p75(frequency) as p75 p50(frequency) as p50 p25
       </table>
     </panel>
   </row>
-</form>
+</dashboard>

@@ -1,8 +1,15 @@
 <nav search_view="search" color="#A9513E">
-  <view name="stats_broken_hosts" default="true" />
-  <collection label="Tuning Dashboards">
-    <view name="tune_hosts" />
-    <view name="tune_sourcetypes" />
-    <view name="tune_indexes" />
+  <view name="stats_missing_data" default="true" />
+
+  <collection label="Analysis Dashboards">
+    <view name="analyze_hosts" />
+    <view name="analyze_sourcetypes" />
+    <view name="analyze_indexes" />
+    <view name="analyze_combination" />
   </collection>
+    <collection label="Outlier Dashboards">
+    <view name="outlier_list" />
+    <view name="outlier_analysis" />
+  </collection>
+        <view name="search" />
 </nav>
