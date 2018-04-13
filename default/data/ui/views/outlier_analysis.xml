@@ -1,13 +1,13 @@
 <form>
   <label>Outlier Analysis</label>
   <fieldset submitButton="false" autoRun="true">
-    <input type="dropdown" token="host" searchWhenChanged="true">
-      <label>Host</label>
-      <fieldForLabel>host</fieldForLabel>
-      <fieldForValue>host</fieldForValue>
+    <input type="dropdown" token="index" searchWhenChanged="true">
+      <label>Index</label>
+      <fieldForLabel>index</fieldForLabel>
+      <fieldForValue>index</fieldForValue>
       <search>
-        <query>|metadata type=hosts index=* | table host</query>
-        <earliest>-24h@h</earliest>
+        <query>|eventcount summarize=false index=* -count | table index | dedup index</query>
+        <earliest>-7d@h</earliest>
         <latest>now</latest>
       </search>
     </input>
@@ -16,18 +16,18 @@
       <fieldForLabel>sourcetype</fieldForLabel>
       <fieldForValue>sourcetype</fieldForValue>
       <search>
-        <query>|metadata type=sourcetypes index=* | table sourcetype</query>
+        <query>| tstats count WHERE index=$index$ earliest=-7d@d latest=now by host sourcetype index | fields sourcetype | dedup sourcetype</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
       </search>
     </input>
-    <input type="dropdown" token="index" searchWhenChanged="true">
-      <label>Index</label>
-      <fieldForLabel>index</fieldForLabel>
-      <fieldForValue>index</fieldForValue>
+    <input type="dropdown" token="host" searchWhenChanged="true">
+      <label>Host</label>
+      <fieldForLabel>host</fieldForLabel>
+      <fieldForValue>host</fieldForValue>
       <search>
-        <query>|eventcount summarize=false index=* -count | table index | dedup index</query>
-        <earliest>-7d@h</earliest>
+        <query>| tstats count WHERE (sourcetype=$sourcetype$ AND index=$index$) earliest=-7d@d latest=now by host sourcetype index | fields host | dedup host</query>
+        <earliest>-24h@h</earliest>
         <latest>now</latest>
       </search>
     </input>
@@ -148,11 +148,11 @@ This timeline will show you a timechart of when your outliers were found. You ca
       <title>Outliers Timeline</title>
       <chart>
         <search>
-          <query>| tstats count WHERE  sourcetype=$sourcetype$ AND host=$host$ AND index=$index$  by _time host sourcetype index span=30m 
-| makecontinuous _time span=30m 
+          <query>| tstats count WHERE  sourcetype=$sourcetype$ AND host=$host$ AND index=$index$  by _time host sourcetype index span=24h 
+| makecontinuous _time span=24h 
 | eval combo=host."&amp;&amp;&amp;&amp;".sourcetype."&amp;&amp;&amp;&amp;".index 
 | xyseries _time combo count 
-| makecontinuous _time span=30m 
+| makecontinuous _time span=24h 
 | fillnull value=0 
 | untable _time combo count 
 | eval HourOfDay=strftime(_time, "%H") 

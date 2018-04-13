@@ -5,16 +5,21 @@
       |loadjob savedsearch="roconnor:search:Index Frequency" | fields index frequency Percentile
     </query>
   </search>
+  <search id="tstatsBaseSearch">
+    <query>
+      | tstats count WHERE index=$index$ earliest=$field1.earliest$ latest=$field1.latest$ by _time host sourcetype index span=15m | eval combo=host."-".sourcetype."-".index | fields combo _ time host sourcetype index count
+    </query>
+  </search>
   <search id="sourcetypeSearchStats">
     <query>
-| tstats count WHERE index=$index$ by _time host sourcetype index span=15m | sort 0 - host sourcetype index _time | streamstats window=2 range(_time) as range by host sourcetype index | sort - host | search range &gt; 900 | stats avg(range) as avg max(range) as max by sourcetype host index | eval max=round(max/60,0) | eval avg=round(avg/60,0) | rename max as "Maximum Gap" avg as "Average Gap"
+| tstats count WHERE index=$index$ earliest=$field1.earliest$ latest=$field1.latest$ by _time host sourcetype index span=15m | sort 0 - host sourcetype index _time | streamstats window=2 range(_time) as range by host sourcetype index | sort - host | search range &gt; 900 | stats avg(range) as avg max(range) as max by sourcetype host index | eval max=round(max/60,0) | eval avg=round(avg/60,0) | rename max as "Maximum Gap" avg as "Average Gap"
     </query>
     <earliest>$field1.earliest$</earliest>
     <latest>$field1.latest$</latest>
   </search>
   <search id="nighttimeweekdaySearch">
     <query>
-| tstats count WHERE index=$index$ by _time host sourcetype index span=15m | sort 0 - host sourcetype index _time | streamstats window=2 range(_time) as range by host sourcetype index
+| tstats count WHERE index=$index$ earliest=$field1.earliest$ latest=$field1.latest$ by _time host sourcetype index span=15m | sort 0 - host sourcetype index _time | streamstats window=2 range(_time) as range by host sourcetype index
 | eval HourOfDay=strftime(_time, "%H") 
 | eval DayOfWeek=strftime(_time, "%A") 
 | eval weekend=case(LIKE(DayOfWeek,"Saturday"), "weekend", LIKE(DayOfWeek,"Sunday"), "weekend", 1=1, "weekday") 
@@ -28,7 +33,7 @@
     <input type="time" token="field1">
       <label>Select Time</label>
       <default>
-        <earliest>-7d@h</earliest>
+        <earliest>-30d@d</earliest>
         <latest>now</latest>
       </default>
     </input>
@@ -61,6 +66,8 @@ Exactly what it sounds like. What time did the last event come in for this index
 What was the maximum time between any two events in the selected time period? If no results were found, this means data has been sending at least once every 15 minutes. 
 <h2>Average Data Gap (By Index)</h2>
 What was the average time between any two events in the selected time period? If no results were found, this means data has been sending at least once every 15 minutes. 
+<h2>Percent Difference (This Week vs. Last Week)</h2>
+What is the percent difference in events between this week, and last week? If we had 100 events this week, and 200 events last week, than our percent difference would be -66.6%
 <h2>Timechart of Data</h2>
 A visualization of the number of events being sent over the selected time period. 
 <h2>Analysis by Host/Index/Sourcetype</h2>
@@ -77,10 +84,8 @@ This panel will show you if your selected index sends more data during the weeke
     <panel>
       <title>Latest Event</title>
       <single>
-        <search>
-          <query>| tstats count WHERE index=$index$ by _time host sourcetype index span=15m | eval combo=host."-".sourcetype."-".index | stats last(_time) as last by index | eval c_time=strftime(last,"%m/%d/%y %H:%M:%S") | fields c_time</query>
-          <earliest>$field1.earliest$</earliest>
-          <latest>$field1.latest$</latest>
+        <search base="tstatsBaseSearch">
+          <query>| stats last(_time) as last by index | eval c_time=strftime(last,"%m/%d/%y %H:%M:%S") | fields c_time</query>
         </search>
         <option name="drilldown">none</option>
         <option name="refresh.display">progressbar</option>
@@ -106,15 +111,27 @@ This panel will show you if your selected index sends more data during the weeke
         <option name="unit">Minutes</option>
       </single>
     </panel>
+    <panel>
+      <title>Percent Difference (This Week vs. Last Week)</title>
+      <single>
+        <search>
+          <query>| tstats count WHERE index="$index$" AND (index=* OR index=_*) earliest=-14d latest=now by _time index span=7d | fields _time index count
+| streamstats current=f last(count) as last_count by index 
+| eval diff = count-last_count | sort - _time | head 1 | eval percent_diff=((count-last_count)/((count+last_count)/2))*100 | fields percent_diff</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="unit">%</option>
+      </single>
+    </panel>
   </row>
   <row>
     <panel>
       <title>Timechart of Data</title>
       <chart>
-        <search>
-          <query>| tstats count WHERE index=$index$ by _time host sourcetype index span=15m | eval combo=host."-".sourcetype."-".index | xyseries _time combo count | makecontinuous _time span=15m | fillnull value=0</query>
-          <earliest>$field1.earliest$</earliest>
-          <latest>$field1.latest$</latest>
+        <search base="tstatsBaseSearch">
+          <query>| xyseries _time combo count | makecontinuous _time span=15m | fillnull value=0</query>
         </search>
         <option name="charting.chart">line</option>
         <option name="charting.chart.nullValueMode">zero</option>
@@ -127,16 +144,14 @@ This panel will show you if your selected index sends more data during the weeke
     <panel>
       <title>Specific Gap Broken Down by Host/Index/Sourcetype</title>
       <table>
-        <search>
-          <query>| tstats count WHERE index=$index$ by _time host sourcetype index span=15m 
+        <search base="tstatsBaseSearch">
+          <query>
 | sort 0 - host sourcetype index _time | streamstats window=2 range(_time) as range by host sourcetype index | eval combo=host."-".sourcetype."-".index | stats avg(range) as avg max(range) as max count(combo) as M by sourcetype host index| eval max=round(max,0) 
 | eval avg=round(avg,0) 
 | addinfo 
 | eval N=ceiling((info_max_time-info_min_time)/15/60)
 | eval frequency=M/N
 | fields index sourcetype host frequency avg max| eval frequency=round(frequency*100,0)."%"</query>
-          <earliest>$field1.earliest$</earliest>
-          <latest>$field1.latest$</latest>
         </search>
         <option name="refresh.display">progressbar</option>
         <drilldown>

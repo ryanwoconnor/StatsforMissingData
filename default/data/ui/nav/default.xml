@@ -1,6 +1,6 @@
 <nav search_view="search" color="#A9513E">
   <view name="stats_missing_data" default="true" />
-
+    <view name="missing_data_dashboard" />
   <collection label="Analysis Dashboards">
     <view name="analyze_hosts" />
     <view name="analyze_sourcetypes" />
@@ -11,5 +11,9 @@
     <view name="outlier_list" />
     <view name="outlier_analysis" />
   </collection>
+  <collection label="Audit">
+    <view name="missing_data_filter_changes" />
+  </collection>
+<a href="/manager/StatsforMissingData/apps/local/StatsforMissingData/setup?action=edit">Setup</a>
         <view name="search" />
 </nav>

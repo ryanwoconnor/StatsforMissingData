@@ -64,7 +64,7 @@ In this panel you'll see a breakdown of where your (Index, Sourcetype, Hosts) fr
       <chart>
         <title>Index Frequency</title>
         <search base="indexBaseSearch">
-          <query/>
+          <query>head 9999 </query>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.overlayFields">Percentile</option>
@@ -101,9 +101,7 @@ In this panel you'll see a breakdown of where your (Index, Sourcetype, Hosts) fr
       <chart>
         <title>Sourcetype Frequency</title>
         <search base="sourcetypeBaseSearch">
-          <query>  sort - frequency 
-| eventstats p95(frequency) as p95 p75(frequency) as p75 p50(frequency) as p50 p25(frequency) as p25
-| eval Percentile = case(frequency &gt;= p95, "95",frequency &gt;= p75, "75",frequency &gt;= p50, "50", frequency &gt;= p25, "25", 1=1, "0") | fields - p*</query>
+          <query>head 9999 </query>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.overlayFields">Percentile</option>
@@ -145,7 +143,7 @@ eventstats p95(frequency) as p95 p75(frequency) as p75 p50(frequency) as p50 p25
       <chart>
         <title>Host Frequency</title>
         <search base="hostBaseSearch">
-          <query/>
+           <query>head 9999 </query>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.overlayFields">Percentile</option>

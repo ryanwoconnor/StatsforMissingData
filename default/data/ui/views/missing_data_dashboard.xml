@@ -1,0 +1,354 @@
+<form>
+  <label>Missing Data Dashboard</label>
+  <init>
+    <set token="filtered">nofilter</set>
+  </init>
+  <search>
+    <query>|rest /servicesNS/-/StatsforMissingData/configs/conf-macros/ splunk_server=local | search title=missingdatasearchterms | table definition </query>
+    <earliest>-60m@m</earliest>
+    <latest>now</latest>
+    <finalized>
+      <condition match=" 'job.resultCount' != 0">
+        <set token="missingdatadefinition">$result.definition$</set>
+      </condition>
+      <condition>
+        <set token="missingdatadefinition"></set>
+      </condition>
+    </finalized>
+  </search>
+  <search>
+    <query>|makeresults | eval def="$form.filter$" | rex mode=sed field=def "s/=/%3D/g" | table def</query>
+    <earliest>-60m@m</earliest>
+    <latest>now</latest>
+    <finalized>
+      <condition match=" 'job.resultCount' != 0">
+        <set token="def">$result.def$</set>
+      </condition>
+      <condition>
+        <set token="def"></set>
+      </condition>
+    </finalized>
+  </search>
+  <description>This dashboard will give information about data that was not present yesterday but had shown up over the last month.</description>
+  <search id="missingdatasearch">
+    <query>
+    | inputlookup state_lookup
+| eval yesterday=strftime(relative_time(time(), "-d"), "%A") 
+| eval sameday=case(DayOfWeek==yesterday,"1", 1=1, "0") 
+| rex field=combo "(?&lt;host&gt;(.*))\&amp;\&amp;\&amp;\&amp;(?&lt;sourcetype&gt;(.*))\&amp;\&amp;\&amp;\&amp;(?&lt;index&gt;(.*))"
+| search sameday=1 AND ($filter$)
+| join type=outer combo 
+    [| tstats count WHERE earliest=-1d@d latest=@d-1s `missingdatasearchterms` AND ($filter$) by _time host sourcetype index span=`missingdatatimespan` 
+    | eval combo=host."&amp;&amp;&amp;&amp;".sourcetype."&amp;&amp;&amp;&amp;".index 
+    | fillnull value=0] 
+| join type=outer combo
+[|inputlookup state_lookup | mvexpand combo_count | eval comboaudit=split(combo_count, ",") | eval time=mvindex(comboaudit,0) | eval events=mvindex(comboaudit, 1) | search events&gt;0 | stats max(time) as last by combo | eval c_time=strftime(last,"%m/%d/%y") | table c_time combo | rename c_time as "Last Indexed Date"]
+| fillnull value=0 count 
+| search count=0 AND avg&gt;0
+| rex field=combo "(?&lt;host&gt;(.*))\&amp;\&amp;\&amp;\&amp;(?&lt;sourcetype&gt;(.*))\&amp;\&amp;\&amp;\&amp;(?&lt;index&gt;(.*))" 
+| fields host sourcetype index avg avg_overall total_datapoints datapoints_for_day frequency count "Last Indexed Date"
+    </query>
+  </search>
+  <fieldset submitButton="false" autoRun="false">
+    <input type="text" token="filter" searchWhenChanged="true" id="text5">
+      <label>Data Filter</label>
+      <default>$missingdatadefinition$</default>
+    </input>
+    <input type="text" token="def" depends="$hidden$">
+      <label>def</label>
+      <default>$def$</default>
+    </input>
+    <input type="text" token="reason">
+      <label>Reason for Change</label>
+    </input>
+  </fieldset>
+  <row>
+    <panel id="button" depends="$def$">
+      <html>
+<a class="button-link" href="/app/StatsforMissingData/update_missing_data_macro?filter=$def$&amp;reason=$reason$">Save Filter Permanently</a>
+       </html>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$alwaysHideCSSStyle$">
+      <html>
+         <style>
+           #text5 .splunk-textinput input{
+               width: 800px !important;
+
+               
+           }
+           #text5 {
+           padding-left: 0px !important;
+               margin-right: 610px !important;
+               }
+          
+          .button-link {
+	padding: 10px 15px;
+	background: #4479BA;
+	color: #FFF;
+	-webkit-border-radius: 4px;
+	-moz-border-radius: 4px;
+	border-radius: 4px;
+	border: solid 1px #20538D;
+	text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4);
+	-webkit-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2);
+	-moz-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2);
+	-webkit-transition-duration: 0.2s;
+	-moz-transition-duration: 0.2s;
+	transition-duration: 0.2s;
+	-webkit-user-select:none;
+	-moz-user-select:none;
+	-ms-user-select:none;
+	user-select:none;
+}
+.button-link:hover {
+	background: #356094;
+	border: solid 1px #2A4E77;
+	text-decoration: none;
+}
+.button-link:active {
+	-webkit-box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.6);
+	-moz-box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.6);
+	box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.6);
+	background: #2E5481;
+	border: solid 1px #203E5F;
+}
+
+#button .dashboard-panel  {
+     background: #eee !important; 
+ }
+         </style>
+       </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Number of Hosts with Missing Data</title>
+      <single>
+        <search base="missingdatasearch">
+          <query>| stats dc(host) as count </query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Number of Indexes with Missing Data</title>
+      <single>
+        <search base="missingdatasearch">
+          <query>| stats dc(index) as count </query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Number of Sourcetypes with Missing Data</title>
+      <single>
+        <search base="missingdatasearch">
+          <query>| stats dc(sourcetype) as count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Number of Combinations of Data</title>
+      <single>
+        <search base="missingdatasearch">
+          <query>| dedup sourcetype index host | stats count | fields count</query>
+        </search>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <link target="_blank">/app/StatsforMissingData/update_missing_data_macro?filter=$filter$</link>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+<p>The table below displays information about your combinations of hosts/sourcetypes/indexes. This includes average number of events per day, and frequency of the days that this sourcetype/host/index combination has been sending (over the last 30 days).</p>
+<p>You can click on any host/sourcetype/index column to view more detailed information about this data and when it stopped reporting.</p>
+<p>If you find out that you don't need information about this host/sourcetype/index in your report, feel free to click on the corresponding "Filter" column to dynamically add that filter to the input above and automatically re-run the missing data search.</p>
+ <p>
+          <b>If you would like to permenantly tune out this data from the report using your updated filter</b> please provide a reason and then click on the Permanently Tune Macro link.</p>
+<br/>
+</html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Data Missing Yesterday</title>
+      <input type="dropdown" token="index" searchWhenChanged="true">
+        <label>Filter Index</label>
+        <default>*</default>
+        <choice>*</choice>
+        <fieldForLabel>index</fieldForLabel>
+        <fieldForValue>index</fieldForValue>
+        <search base="missingdatasearch">
+          <query>| table index | dedup index</query>
+        </search>
+      </input>
+      <input type="dropdown" token="sourcetype" searchWhenChanged="true">
+        <label>Filter Sourcetype</label>
+        <default>*</default>
+        <choice>*</choice>
+        <fieldForLabel>sourcetype</fieldForLabel>
+        <fieldForValue>sourcetype</fieldForValue>
+        <search base="missingdatasearch">
+          <query>| table sourcetype | dedup sourcetype</query>
+        </search>
+      </input>
+      <input type="dropdown" token="host" searchWhenChanged="true">
+        <label>Filter Host</label>
+        <default>*</default>
+        <choice value="*">*</choice>
+        <fieldForLabel>host</fieldForLabel>
+        <fieldForValue>host</fieldForValue>
+        <search base="missingdatasearch">
+          <query>| table host | dedup host</query>
+        </search>
+      </input>
+      <input type="dropdown" token="date" searchWhenChanged="true">
+        <label>Filter Last Indexed Date</label>
+        <default>*</default>
+        <choice value="*">*</choice>
+        <fieldForLabel>c_time</fieldForLabel>
+        <fieldForValue>c_time</fieldForValue>
+        <search base="missingdatasearch">
+          <query>| fields "Last Indexed Date" | rename "Last Indexed Date" as c_time | dedup c_time </query>
+        </search>
+      </input>
+      <table>
+        <search base="missingdatasearch">
+          <query>| table index host sourcetype frequency avg_overall "Last Indexed Date" |  sort 0 - avg_overall frequency | eval frequency=frequency*100 | eval frequency=frequency."%" |rename frequency as "Percent of Days with Data" avg_overall as "Average Events Per Day" | eval "Filter Combination"="Filter Combination" | eval "Filter Sourcetype"="Filter Sourcetype" | eval "Filter Index"="Filter Index" | eval "Filter Host" = "Filter Host" | eval missingdatadefinition = "$missingdatadefinition$" | rex mode=sed field=missingdatadefinition "s/\"/"\\\""/g" | eval missingdatadefinition_host="$form.filter$"+" AND (host!="+host+")"  | eval missingdatadefinition_index="$form.filter$"+" AND (index!="+index+")" |  eval missingdatadefinition_sourcetype="$form.filter$"+" AND (sourcetype!="+sourcetype+")" |  eval missingdatadefinition_combo="$form.filter$"+" AND (host!="+host+" index!="+index+" sourcetype!="+sourcetype+")" | search index="$index$" AND host="$host$" AND sourcetype="$sourcetype$" AND "Last Indexed Date"="$date$" </query>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <fields>["host","sourcetype","index","Last Indexed Date", "Percent of Days with Data", "Average Events Per Day","Filter Index","Filter Sourcetype","Filter Host","Filter Combination"]</fields>
+        <drilldown>
+          <condition field="index">
+            <link target="_blank">/app/StatsforMissingData/analyze_combination?form.index=$row.index$&amp;form.sourcetype=$row.sourcetype$&amp;form.host=$row.host$</link>
+          </condition>
+          <condition field="sourcetype">
+            <link target="_blank">/app/StatsforMissingData/analyze_combination?form.index=$row.index$&amp;form.sourcetype=$row.sourcetype$&amp;form.host=$row.host$</link>
+          </condition>
+          <condition field="host">
+            <link target="_blank">/app/StatsforMissingData/analyze_combination?form.index=$row.index$&amp;form.sourcetype=$row.sourcetype$&amp;form.host=$row.host$</link>
+          </condition>
+          <condition field="Percent of Days with Data"></condition>
+          <condition field="Average Events Per Day"></condition>
+          <condition field="Filter Index">
+            <set token="form.filter">$row.missingdatadefinition_index$</set>
+          </condition>
+          <condition field="Filter Sourcetype">
+            <set token="form.filter">$row.missingdatadefinition_sourcetype$</set>
+          </condition>
+          <condition field="Filter Host">
+            <set token="form.filter">$row.missingdatadefinition_host$</set>
+          </condition>
+          <condition field="Filter Combination">
+            <set token="form.filter">$row.missingdatadefinition_combo$</set>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Top 10 Missing Indexes</title>
+      <table>
+        <search base="missingdatasearch">
+          <query>| table index host sourcetype frequency avg_overall  "Last Indexed Date" | search "Last Indexed Date"="$date$" |  stats count by index | sort 0 - count | head 10</query>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="index">
+            <link target="_blank">/app/StatsforMissingData/analyze_indexes?form.index=$row.index$</link>
+          </condition>
+          <condition field="sourcetype">
+            <link target="_blank">/app/StatsforMissingData/analyze_sourcetypes?form.sourcetype=$row.sourcetype$</link>
+          </condition>
+          <condition field="host">
+            <link target="_blank">/app/StatsforMissingData/analyze_hosts?form.host=$row.host$</link>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <title>Top 10 Missing Sourcetypes</title>
+      <table>
+        <search base="missingdatasearch">
+          <query>| table index host sourcetype frequency avg_overall  "Last Indexed Date"  | search "Last Indexed Date"="$date$" |  stats count by sourcetype | sort 0 - count | head 10</query>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="index">
+            <link target="_blank">/app/StatsforMissingData/analyze_indexes?form.index=$row.index$</link>
+          </condition>
+          <condition field="sourcetype">
+            <link target="_blank">/app/StatsforMissingData/analyze_sourcetypes?form.sourcetype=$row.sourcetype$</link>
+          </condition>
+          <condition field="host">
+            <link target="_blank">/app/StatsforMissingData/analyze_hosts?form.host=$row.host$</link>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <title>Top 10 Missing Hosts</title>
+      <table>
+        <search base="missingdatasearch">
+          <query>| table index host sourcetype frequency avg_overall  "Last Indexed Date" | search "Last Indexed Date"="$date$" | stats count by host | sort 0 - count | head 10</query>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <condition field="index">
+            <link target="_blank">/app/StatsforMissingData/analyze_indexes?form.index=$row.index$</link>
+          </condition>
+          <condition field="sourcetype">
+            <link target="_blank">/app/StatsforMissingData/analyze_sourcetypes?form.sourcetype=$row.sourcetype$</link>
+          </condition>
+          <condition field="host">
+            <link target="_blank">/app/StatsforMissingData/analyze_hosts?form.host=$row.host$</link>
+          </condition>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Date in which missing data was last seen</title>
+      <chart>
+        <title>Clicking on any one of these dates will filter the panels above, as well as the main table</title>
+        <search base="missingdatasearch">
+          <query>| table index host sourcetype frequency avg_overall "Last Indexed Date" |  stats count by "Last Indexed Date" | sort 0 - "Last Indexed Date"</query>
+        </search>
+        <option name="charting.chart">column</option>
+        <drilldown>
+          <set token="form.date">$click.value$</set>
+        </drilldown>
+      </chart>
+    </panel>
+  </row>
+</form>

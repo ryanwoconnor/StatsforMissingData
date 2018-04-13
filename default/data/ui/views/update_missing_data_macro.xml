@@ -1,0 +1,22 @@
+<dashboard>
+  <label>Update Missing Data Macro</label>
+  <row>
+    <panel>
+      <table>
+        <search>
+          <query>|makeresults | eval definition="$filter$" | updatemissingdatamacro | eval reason="$reason$" | eval user="$env:user$" | outputlookup append=true missing_data_audit_lookup</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

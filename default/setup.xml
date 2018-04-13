@@ -1,0 +1,28 @@
+<setup>
+    <block title="Macros" endpoint="/configs/conf-macros">
+	<input endpoint="/configs/conf-macros" entity="missingdataearliest" field="definition">
+                <label>
+			How far back do you want Splunk to search? (Default -28d)
+		</label>
+                <type>
+                        text
+                </type>
+        </input>
+	<input endpoint="/configs/conf-macros" entity="missingdatatimespan" field="definition">
+                <label>
+                	How big of a timespan you want Splunk to consider for each sample. To check if data is coming in once per day, use 24h. (Default 24h)
+		</label>
+                <type>
+                        text
+                </type>
+        </input>
+        <input endpoint="/configs/conf-macros" entity="missingdatatimespandatapoints" field="definition">
+		<label>
+			How many datapoints will you have? This is generally your earliest time divided by timespan. So if you search back 28 days, and have a span of 24 hours, this value is 28. (Default 28)
+		</label>
+		<type>
+			text
+		</type>
+	</input>
+    </block>
+</setup>
